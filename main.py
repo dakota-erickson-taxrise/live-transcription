@@ -187,6 +187,8 @@ if __name__ == "__main__":
     ASSEMBLY_API_KEY = os.environ.get("ASSEMBLY_AI_KEY")
     ANTHROPIC_API_KEY = "your_anthropic_api_key"
     
+    print("Running websocket...")
+
     asyncio.run(start_server(
         assembly_api_key=ASSEMBLY_API_KEY,
         anthropic_api_key=ANTHROPIC_API_KEY
