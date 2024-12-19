@@ -8,6 +8,8 @@ from typing import Optional, Dict
 from anthropic import Anthropic
 import time
 import os
+import logging
+
 
 class PlaybookItem:
     def __init__(self, name: str, description: str):
@@ -76,7 +78,7 @@ class ConversationAnalyzer:
             return {"updates": updates}
             
         except Exception as e:
-            print(f"Analysis error: {e}")
+            logging.error(f"Analysis error: {e}")
             return {"error": str(e)}
 
 class TranscriptionWebSocket:
@@ -91,7 +93,7 @@ class TranscriptionWebSocket:
 
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
         self.websocket = websocket
-        print(f"Client connected from {websocket.remote_address}")
+        logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
             if not transcript.text:
@@ -121,7 +123,7 @@ class TranscriptionWebSocket:
             )
 
         def on_transcription_error(error: aai.RealtimeError):
-            print(f"Transcription error: {error}")
+            logging.error(f"Transcription error: {error}")
             asyncio.run_coroutine_threadsafe(
                 websocket.send(json.dumps({"type": "error", "error": str(error)})),
                 asyncio.get_event_loop()
@@ -152,7 +154,7 @@ class TranscriptionWebSocket:
                 self.audio_queue.put(message)
 
         except websockets.exceptions.ConnectionClosed:
-            print("Client disconnected")
+            logging.info("Client disconnected")
         finally:
             self.is_running = False
             if self.transcriber:
@@ -167,10 +169,10 @@ async def start_server(
     
     # Exit early if we don't get API keys
     if assembly_api_key is None:
-        print("Missing AssemblyAI API key")
+        logging.error("Missing AssemblyAI API key")
         return None
     if anthropic_api_key is None:
-        print("Missing AnthropicAI API key")
+        logging.error("Missing AnthropicAI API key")
         return None
     
     transcription_ws = TranscriptionWebSocket(assembly_api_key, anthropic_api_key)
@@ -180,14 +182,14 @@ async def start_server(
         host,
         port
     ):
-        print(f"WebSocket server started on ws://{host}:{port}")
+        logging.info(f"WebSocket server started on ws://{host}:{port}")
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
     ASSEMBLY_API_KEY = os.environ.get("ASSEMBLY_AI_KEY")
     ANTHROPIC_API_KEY = "your_anthropic_api_key"
     
-    print("Running websocket...")
+    logging.info("Running websocket...")
 
     asyncio.run(start_server(
         assembly_api_key=ASSEMBLY_API_KEY,
