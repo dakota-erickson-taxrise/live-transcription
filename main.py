@@ -156,7 +156,7 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 # debugging purposes to see the form of the message
-                # logging.info(f"message: ${message}")
+                logging.info(f"type of message is ${type(message)} \nand message is: ${message}")
                 self.audio_queue.put(message['media']['payload'])
 
         except websockets.exceptions.ConnectionClosed:
