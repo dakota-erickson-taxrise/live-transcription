@@ -155,7 +155,7 @@ class TranscriptionWebSocket:
             thread.start()
 
             async for message in websocket:
-                logging.info(f"message: $message")
+                logging.info(f"message: ${message}")
                 self.audio_queue.put(message)
 
         except websockets.exceptions.ConnectionClosed:
