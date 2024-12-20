@@ -100,7 +100,9 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
+            logging.info(f"transcript is {transcript}")
             if not transcript.text:
+                logging.info("No Transcript.text present")
                 return
             
             # Only analyze final transcripts
@@ -147,9 +149,10 @@ class TranscriptionWebSocket:
             while self.is_running:
                 if not self.audio_queue.empty():
                     audio_data = self.audio_queue.get()
-                    logging.info(f"streaming audio_data ${type(audio_data)}")
+                    logging.info(f"streaming audio_data ${audio_data}")
                     self.transcriber.stream(audio_data)
             
+            logging.info("closing transcriber connection")
             self.transcriber.close()
 
         try:
@@ -166,8 +169,10 @@ class TranscriptionWebSocket:
         except websockets.exceptions.ConnectionClosed:
             logging.info("Client disconnected")
         finally:
+            logging.info("setting is_running to False")
             self.is_running = False
             if self.transcriber:
+                logging.info("inside if closing transcriber connection")
                 self.transcriber.close()
 
 async def start_server(
