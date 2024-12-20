@@ -11,6 +11,10 @@ import os
 import logging
 
 
+logging.basicConfig(
+    format="%(asctime)s %(message)s", level=logging.INFO
+)
+
 class PlaybookItem:
     def __init__(self, name: str, description: str):
         self.name = name
