@@ -98,6 +98,7 @@ class TranscriptionWebSocket:
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
         self.websocket = websocket
         logging.info(f"Client connected from {websocket.remote_address}")
+        logging.info(f"websocket is ${json.dumps(websocket)}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
             if not transcript.text:
