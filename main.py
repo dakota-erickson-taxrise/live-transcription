@@ -114,12 +114,14 @@ class TranscriptionWebSocket:
                     "is_final": True,
                     "playbook_updates": [] # analysis.get("updates", [])
                 }
+                logging.info(f"final response is {response}")
             else:
                 response = {
                     "type": "transcript",
                     "text": transcript.text,
                     "is_final": False
                 }
+                logging.info(f"non-final response is {response}")
             
             asyncio.run_coroutine_threadsafe(
                 websocket.send(json.dumps(response)),
@@ -145,6 +147,7 @@ class TranscriptionWebSocket:
             while self.is_running:
                 if not self.audio_queue.empty():
                     audio_data = self.audio_queue.get()
+                    logging.info(f"streaming audio_data ${type(audio_data)}")
                     self.transcriber.stream(audio_data)
             
             self.transcriber.close()
@@ -156,7 +159,7 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 # debugging purposes to see the form of the message
-                logging.info(f"message is: ${json.loads(message)}")
+                # logging.info(f"message is: ${json.loads(message)}")
                 json_parsed_messsage = json.loads(message)
                 self.audio_queue.put(json_parsed_messsage)
 
