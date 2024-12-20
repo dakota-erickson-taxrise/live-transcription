@@ -139,8 +139,8 @@ class TranscriptionWebSocket:
 
         def transcription_thread():
             self.transcriber = aai.RealtimeTranscriber(
-                on_data=on_transcription_data(),
-                on_error=on_transcription_error(),
+                on_data=on_transcription_data,
+                on_error=on_transcription_error,
                 sample_rate=44100
             )
             
