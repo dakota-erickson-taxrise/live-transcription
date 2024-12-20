@@ -165,7 +165,7 @@ class TranscriptionWebSocket:
                 self.transcriber.close()
 
 async def start_server(
-    host: str = "localhost",
+    host: str = "0.0.0.0",
     port: int = 8765,
     assembly_api_key: str = None,
     anthropic_api_key: str = None
