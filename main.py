@@ -100,6 +100,8 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
+            logging.info(f"transcript is {transcript}")
+            
             if not transcript.text:
                 logging.info("No Transcript.text present")
                 return
