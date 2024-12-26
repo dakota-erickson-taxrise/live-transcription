@@ -93,6 +93,7 @@ class TranscriptionWebSocket:
         self.transcriber = None
         self.audio_queue = Queue()
         self.is_running = False
+        self.encoding=aai.AudioEncoding.pcm_mulaw
         self.analyzer =  None # TODO ConversationAnalyzer(anthropic_api_key)
 
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
@@ -178,7 +179,7 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 # debugging purposes to see the form of the message
-                # logging.info(f"message is: {json.loads(message)}")
+                logging.info(f"message is: {json.loads(message)}")
                 json_parsed_messsage = json.loads(message)
                 self.audio_queue.put(json_parsed_messsage)
 
