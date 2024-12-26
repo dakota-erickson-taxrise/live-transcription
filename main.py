@@ -100,10 +100,11 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
-            logging.info(f"transcript is {transcript}")
             if not transcript.text:
                 logging.info("No Transcript.text present")
                 return
+            
+            logging.info(f"transcript.text is {transcript.text}")
             
             # Only analyze final transcripts
             if isinstance(transcript, aai.RealtimeFinalTranscript):
@@ -116,14 +117,12 @@ class TranscriptionWebSocket:
                     "is_final": True,
                     "playbook_updates": [] # analysis.get("updates", [])
                 }
-                logging.info(f"final response is {response}")
             else:
                 response = {
                     "type": "transcript",
                     "text": transcript.text,
                     "is_final": False
                 }
-                logging.info(f"non-final response is {response}")
             
             asyncio.run_coroutine_threadsafe(
                 websocket.send(json.dumps(response)),
@@ -148,8 +147,12 @@ class TranscriptionWebSocket:
             
             while self.is_running:
                 if not self.audio_queue.empty():
-                    audio_data = self.audio_queue.get()
-                    logging.info(f"streaming audio_data ${audio_data}")
+                    message = self.audio_queue.get()
+                    audio_data = {
+                        "audio_data": message["payload"]
+                    }
+                    logging.info(f"streaming audio_data {audio_data}")
+
                     self.transcriber.stream(audio_data)
             
             logging.info("closing transcriber connection")
@@ -162,7 +165,7 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 # debugging purposes to see the form of the message
-                # logging.info(f"message is: ${json.loads(message)}")
+                # logging.info(f"message is: {json.loads(message)}")
                 json_parsed_messsage = json.loads(message)
                 self.audio_queue.put(json_parsed_messsage)
 
