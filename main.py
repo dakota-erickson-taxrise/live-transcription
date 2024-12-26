@@ -148,12 +148,14 @@ class TranscriptionWebSocket:
             while self.is_running:
                 if not self.audio_queue.empty():
                     message = self.audio_queue.get()
-                    audio_data = {
-                        "audio_data": message["payload"]
-                    }
-                    logging.info(f"streaming audio_data {audio_data}")
+                    payload = message.get("payload", None)
+                    if payload is not None:
+                        audio_data = {
+                            "audio_data": payload
+                        }
+                        logging.info(f"streaming audio_data {audio_data}")
 
-                    self.transcriber.stream(audio_data)
+                        self.transcriber.stream(audio_data)
             
             logging.info("closing transcriber connection")
             self.transcriber.close()
