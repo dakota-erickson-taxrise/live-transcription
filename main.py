@@ -181,6 +181,7 @@ class TranscriptionWebSocket:
                     on_data=on_transcription_data,
                     on_error=on_transcription_error,
                     sample_rate=44100,  # Using standard audio sample rate
+                    encoding=aai.AudioEncoding.pcm_mulaw
                 )
 
                 logging.info("Connecting transcriber...")
