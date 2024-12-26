@@ -127,14 +127,17 @@ class TranscriptionWebSocket:
                     "is_final": False
                 }
         
-            def send_message():
-                try:
-                    websocket.send(json.dumps(response))
-                except Exception as e:
-                    logging.error(f"Error sending websocket message: {e}")
-                    
-            thread = threading.Thread(target=send_message)
-            thread.start()
+            logging.info(f"Response is {response}")
+
+            # I'm not sure we want to be doing this. Why are we trying to send the response somewhere?
+            # def send_message():
+            #     try:
+            #         websocket.send(json.dumps(response))
+            #     except Exception as e:
+            #         logging.error(f"Error sending websocket message: {e}")
+
+            # thread = threading.Thread(target=send_message)
+            # thread.start()
 
 
         def on_transcription_error(error: aai.RealtimeError):
