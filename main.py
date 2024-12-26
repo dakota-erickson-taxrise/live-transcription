@@ -127,13 +127,10 @@ class TranscriptionWebSocket:
                     "is_final": False
                 }
 
-
-            # TODO this doesn't make a ton of sense to me immediately,
-            #  we don't want to SEND a the response back into the websocket...
-            asyncio.run_coroutine_threadsafe(
-                websocket.send(json.dumps(response)),
-                asyncio.get_event_loop()
-            )
+            asyncio.run_in_thread(send_websocket_message, response)
+        
+        async def send_websocket_message(response):
+            await websocket.send(json.dumps(response))
 
         def on_transcription_error(error: aai.RealtimeError):
             logging.error(f"Transcription error: {error}")
