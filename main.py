@@ -102,9 +102,10 @@ class TranscriptionWebSocket:
         def on_transcription_data(transcript: aai.RealtimeTranscript):
             logging.info(f"transcript is {transcript}")
 
-            if not transcript.text:
-                logging.info("No Transcript.text present")
-                return
+            # TODO this is commented out for now until I can figure out why text is always missing
+            # if not transcript.text:
+            #     logging.info("No Transcript.text present")
+            #     return
             
             logging.info(f"transcript.text is {transcript.text}")
             
@@ -146,7 +147,6 @@ class TranscriptionWebSocket:
                 on_data=on_transcription_data,
                 on_error=on_transcription_error,
                 sample_rate=44100,
-                disable_partial_transcripts=True
             )
             
             self.transcriber.connect()
