@@ -101,7 +101,7 @@ class TranscriptionWebSocket:
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
             logging.info(f"transcript is {transcript}")
-            
+
             if not transcript.text:
                 logging.info("No Transcript.text present")
                 return
@@ -125,7 +125,10 @@ class TranscriptionWebSocket:
                     "text": transcript.text,
                     "is_final": False
                 }
-            
+
+
+            # TODO this doesn't make a ton of sense to me immediately,
+            #  we don't want to SEND a the response back into the websocket...
             asyncio.run_coroutine_threadsafe(
                 websocket.send(json.dumps(response)),
                 asyncio.get_event_loop()
@@ -142,7 +145,8 @@ class TranscriptionWebSocket:
             self.transcriber = aai.RealtimeTranscriber(
                 on_data=on_transcription_data,
                 on_error=on_transcription_error,
-                sample_rate=44100
+                sample_rate=44100,
+                disable_partial_transcripts=True
             )
             
             self.transcriber.connect()
