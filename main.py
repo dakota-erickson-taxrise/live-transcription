@@ -93,9 +93,8 @@ class TranscriptionWebSocket:
         self.transcriber = None
         self.audio_queue = Queue()
         self.is_running = False
-        self.encoding = aai.AudioEncoding.pcm_mulaw
-        self.analyzer = None  # TODO ConversationAnalyzer(anthropic_api_key)
         self.loop = None
+        self.analyzer = None  # TODO ConversationAnalyzer(anthropic_api_key)
 
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
         self.websocket = websocket
@@ -103,24 +102,25 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
-            logging.info(f"transcript is {transcript}")
-            logging.info(f"transcript.text is {transcript.text}")
+            logging.info(f"Received transcript type: {type(transcript)}")
+            logging.info(f"Full transcript object: {transcript.__dict__}")
             
             if isinstance(transcript, aai.RealtimeFinalTranscript):
                 response = {
                     "type": "transcript",
-                    "text": transcript.text,
+                    "text": transcript.text if transcript.text else "",
                     "is_final": True,
-                    "playbook_updates": []
+                    "playbook_updates": [],
+                    "words": [word.__dict__ for word in transcript.words] if transcript.words else []
                 }
             else:
                 response = {
                     "type": "transcript",
-                    "text": transcript.text,
-                    "is_final": False
+                    "text": transcript.text if transcript.text else "",
+                    "is_final": False,
+                    "words": [word.__dict__ for word in transcript.words] if transcript.words else []
                 }
 
-            # Use call_soon_threadsafe instead of run_coroutine_threadsafe
             self.loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(self.send_message(response))
             )
@@ -139,36 +139,66 @@ class TranscriptionWebSocket:
                     message = self.audio_queue.get()
                     payload = message.get("payload", None)
                     if payload is not None:
-                        audio_data = {"audio_data": payload}
-                        logging.info(f"streaming audio_data {audio_data}")
-                        self.transcriber.stream(audio_data)
-                await asyncio.sleep(0.01)  # Small delay to prevent CPU spinning
+                        try:
+                            # Ensure payload is in the correct format
+                            if isinstance(payload, str):
+                                # If payload is base64 encoded, decode it here
+                                import base64
+                                audio_data = base64.b64decode(payload)
+                            else:
+                                audio_data = payload
+
+                            # Log the audio data details for debugging
+                            logging.info(f"Audio data length: {len(audio_data)} bytes")
+                            
+                            self.transcriber.stream({"audio_data": audio_data})
+                        except Exception as e:
+                            logging.error(f"Error processing audio data: {e}")
+                await asyncio.sleep(0.01)
 
         def transcription_thread():
+            config = aai.RealtimeTranscriberConfig(
+                sample_rate=16000,  # Most common sample rate
+                encoding=aai.AudioEncoding.linear16,  # PCM 16-bit
+                # Enable word-level timestamps and confidence scores
+                word_timestamps=True,
+                timestamps=True
+            )
+            
             self.transcriber = aai.RealtimeTranscriber(
                 on_data=on_transcription_data,
                 on_error=on_transcription_error,
-                sample_rate=44100,
+                config=config
             )
-            self.transcriber.connect()
-            
-            while self.is_running:
-                time.sleep(0.01)  # Small delay to prevent CPU spinning
-            
-            logging.info("closing transcriber connection")
-            self.transcriber.close()
+
+            try:
+                self.transcriber.connect()
+                logging.info("Transcriber connected successfully")
+                
+                while self.is_running:
+                    time.sleep(0.01)
+                
+            except Exception as e:
+                logging.error(f"Error in transcription thread: {e}")
+            finally:
+                logging.info("Closing transcriber connection")
+                self.transcriber.close()
 
         try:
             self.is_running = True
             thread = threading.Thread(target=transcription_thread)
             thread.start()
 
-            # Start audio processing task
             audio_process_task = asyncio.create_task(process_audio_queue())
 
             async for message in websocket:
-                json_parsed_message = json.loads(message)
-                self.audio_queue.put(json_parsed_message)
+                try:
+                    json_parsed_message = json.loads(message)
+                    self.audio_queue.put(json_parsed_message)
+                except json.JSONDecodeError as e:
+                    logging.error(f"Error parsing message: {e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error processing message: {e}")
 
         except websockets.exceptions.ConnectionClosed:
             logging.info("Client disconnected")
