@@ -127,18 +127,11 @@ class TranscriptionWebSocket:
                     "text": transcript.text,
                     "is_final": False
                 }
-        
-            logging.info(f"Response is {response}")
 
-            # I'm not sure we want to be doing this. Why are we trying to send the response somewhere?
-            # def send_message():
-            #     try:
-            #         websocket.send(json.dumps(response))
-            #     except Exception as e:
-            #         logging.error(f"Error sending websocket message: {e}")
-
-            # thread = threading.Thread(target=send_message)
-            # thread.start()
+            asyncio.run_coroutine_threadsafe(
+                websocket.send(json.dumps(response)),
+                asyncio.get_event_loop()
+            )
 
 
         def on_transcription_error(error: aai.RealtimeError):
@@ -179,17 +172,15 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 # debugging purposes to see the form of the message
-                logging.info(f"message is: {json.loads(message)}")
+                # logging.info(f"message is: {json.loads(message)}")
                 json_parsed_messsage = json.loads(message)
                 self.audio_queue.put(json_parsed_messsage)
 
         except websockets.exceptions.ConnectionClosed:
             logging.info("Client disconnected")
         finally:
-            logging.info("setting is_running to False")
             self.is_running = False
             if self.transcriber:
-                logging.info("inside if closing transcriber connection")
                 self.transcriber.close()
 
 async def start_server(
