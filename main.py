@@ -126,11 +126,16 @@ class TranscriptionWebSocket:
                     "text": transcript.text,
                     "is_final": False
                 }
-
-            asyncio.run_in_thread(send_websocket_message, response)
         
-        async def send_websocket_message(response):
-            await websocket.send(json.dumps(response))
+            def send_message():
+                try:
+                    websocket.send(json.dumps(response))
+                except Exception as e:
+                    logging.error(f"Error sending websocket message: {e}")
+                    
+            thread = threading.Thread(target=send_message)
+            thread.start()
+
 
         def on_transcription_error(error: aai.RealtimeError):
             logging.error(f"Transcription error: {error}")
