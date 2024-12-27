@@ -105,6 +105,7 @@ class TranscriptionWebSocket:
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
             logging.info(f"Received transcript type: {type(transcript)}")
+            logging.info(f"Full transcript data: {transcript.__dict__}")
             
             if isinstance(transcript, aai.RealtimeFinalTranscript):
                 logging.info(f"Final transcript received: {transcript.text}")
@@ -139,46 +140,51 @@ class TranscriptionWebSocket:
             while self.is_running:
                 if not self.audio_queue.empty():
                     message = self.audio_queue.get()
-                    payload = message.get("payload", None)
                     
-                    if payload is not None:
-                        try:
-                            # Log the first audio chunk details
-                            if not self.first_audio_received:
-                                logging.info(f"First audio chunk received.")
-                                logging.info(f"Payload type: {type(payload)}")
-                                if isinstance(payload, str):
-                                    logging.info(f"First few bytes (base64): {payload[:50]}...")
-                                self.first_audio_received = True
-
-                            # For TalkDesk mu-law audio
-                            if isinstance(payload, str):
-                                try:
-                                    audio_data = base64.b64decode(payload)
-                                    # Log audio chunk size
-                                    logging.info(f"Audio chunk size: {len(audio_data)} bytes")
-                                    
-                                    # Stream the audio data
-                                    self.transcriber.stream({"audio_data": audio_data})
-                                except Exception as e:
-                                    logging.error(f"Error processing audio chunk: {e}")
+                    try:
+                        # Extract media payload from TalkDesk message structure
+                        if message.get("event") == "media" and "media" in message:
+                            payload = message["media"].get("payload")
+                            
+                            if payload:
+                                # Check if payload is not just silence
+                                if not all(c == '/' for c in payload):
+                                    try:
+                                        audio_data = base64.b64decode(payload)
+                                        chunk_size = len(audio_data)
+                                        
+                                        # Log non-silent audio chunks
+                                        logging.info(f"Processing non-silent audio chunk: {chunk_size} bytes")
+                                        
+                                        if chunk_size > 0:
+                                            # Stream the audio data
+                                            self.transcriber.stream({"audio_data": audio_data})
+                                        else:
+                                            logging.warning("Received empty audio chunk")
+                                    except Exception as e:
+                                        logging.error(f"Error processing audio chunk: {e}")
+                                else:
+                                    logging.debug("Skipping silent audio chunk")
                             else:
-                                logging.error(f"Unexpected payload type: {type(payload)}")
+                                logging.warning("No payload in media message")
+                        else:
+                            logging.debug(f"Skipping non-media message: {message.get('event', 'unknown event')}")
                                 
-                        except Exception as e:
-                            logging.error(f"Error processing audio data: {e}")
+                    except Exception as e:
+                        logging.error(f"Error processing message: {e}")
+                        logging.error(f"Message that caused error: {message}")
                             
                 await asyncio.sleep(0.01)
 
         def transcription_thread():
             try:
-                logging.info("Initializing transcriber with mu-law encoding...")
+                logging.info("Initializing transcriber...")
                 
                 self.transcriber = aai.RealtimeTranscriber(
                     on_data=on_transcription_data,
                     on_error=on_transcription_error,
-                    sample_rate=8000,  # Common for telephony
-                    encoding=aai.AudioEncoding.pcm_mulaw  # Explicitly set mu-law encoding
+                    sample_rate=8000,  # Telephony standard
+                    encoding=aai.AudioEncoding.pcm_mulaw  # mu-law encoding
                 )
 
                 logging.info("Connecting transcriber...")
@@ -207,9 +213,14 @@ class TranscriptionWebSocket:
             async for message in websocket:
                 try:
                     json_parsed_message = json.loads(message)
-                    # Log the structure of the first message
-                    if not self.first_audio_received:
-                        logging.info(f"First message structure: {json.dumps(json_parsed_message, indent=2)}")
+                    # Log first few non-silent messages
+                    if not self.first_audio_received and "media" in json_parsed_message:
+                        payload = json_parsed_message["media"].get("payload", "")
+                        if not all(c == '/' for c in payload):
+                            logging.info("First non-silent audio message received")
+                            logging.info(f"Message structure: {json.dumps(json_parsed_message, indent=2)}")
+                            self.first_audio_received = True
+                    
                     self.audio_queue.put(json_parsed_message)
                 except json.JSONDecodeError as e:
                     logging.error(f"JSON parse error: {e}")
@@ -230,6 +241,7 @@ class TranscriptionWebSocket:
                 await self.websocket.send(json.dumps(message))
             except Exception as e:
                 logging.error(f"Error sending message: {e}")
+
 
 async def start_server(
     host: str = "0.0.0.0",
