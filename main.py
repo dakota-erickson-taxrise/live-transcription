@@ -109,7 +109,7 @@ class TranscriptionWebSocket:
             logging.info(f"Full transcript data: {transcript.__dict__}")
             
             if isinstance(transcript, aai.RealtimeFinalTranscript):
-                logging.info(f"Final transcript received: {transcript.text}")
+                logging.info("Final transcript received")
                 response = {
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
@@ -125,6 +125,7 @@ class TranscriptionWebSocket:
                     "words": [word.__dict__ for word in transcript.words] if hasattr(transcript, 'words') else []
                 }
 
+            logging.info(f"Response is {response}")
             self.loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(self.send_message(response))
             )
