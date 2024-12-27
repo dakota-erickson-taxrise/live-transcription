@@ -114,18 +114,18 @@ class TranscriptionWebSocket:
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
                     "is_final": True,
-                    "words": [word.__dict__ for word in transcript.words] if hasattr(transcript, 'words') else []
+                    "words": [word.text for word in transcript.words] if hasattr(transcript, 'words') else []
                 }
+                logging.info(f"Response is {response}")
             else:
                 logging.info(f"Partial transcript received: {transcript.text}")
                 response = {
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
                     "is_final": False,
-                    "words": [word.__dict__ for word in transcript.words] if hasattr(transcript, 'words') else []
+                    "words": [word.text for word in transcript.words] if hasattr(transcript, 'words') else []
                 }
 
-            logging.info(f"Response is {response}")
             self.loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(self.send_message(response))
             )
