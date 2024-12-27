@@ -105,8 +105,8 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
-            logging.info(f"Received transcript type: {type(transcript)}")
-            logging.info(f"Full transcript data: {transcript.__dict__}")
+            # logging.info(f"Received transcript type: {type(transcript)}")
+            # logging.info(f"Full transcript data: {transcript.__dict__}")
             
             if isinstance(transcript, aai.RealtimeFinalTranscript):
                 logging.info("Final transcript received")
@@ -118,7 +118,7 @@ class TranscriptionWebSocket:
                 }
                 logging.info(f"Response is {response}")
             else:
-                logging.info(f"Partial transcript received: {transcript.text}")
+                # logging.info(f"Partial transcript received: {transcript.text}")
                 response = {
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
