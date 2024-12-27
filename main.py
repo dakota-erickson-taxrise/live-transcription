@@ -9,6 +9,7 @@ from anthropic import Anthropic
 import time
 import os
 import logging
+import base64
 
 
 logging.basicConfig(
@@ -95,6 +96,7 @@ class TranscriptionWebSocket:
         self.is_running = False
         self.loop = None
         self.analyzer = None
+        self.first_audio_received = False
 
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
         self.websocket = websocket
@@ -102,19 +104,18 @@ class TranscriptionWebSocket:
         logging.info(f"Client connected from {websocket.remote_address}")
 
         def on_transcription_data(transcript: aai.RealtimeTranscript):
-            logging.info("Transcript received:")
-            logging.info(f"  Type: {type(transcript)}")
-            logging.info(f"  Content: {transcript.__dict__}")
+            logging.info(f"Received transcript type: {type(transcript)}")
             
             if isinstance(transcript, aai.RealtimeFinalTranscript):
+                logging.info(f"Final transcript received: {transcript.text}")
                 response = {
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
                     "is_final": True,
-                    "playbook_updates": [],
                     "words": [word.__dict__ for word in transcript.words] if hasattr(transcript, 'words') else []
                 }
             else:
+                logging.info(f"Partial transcript received: {transcript.text}")
                 response = {
                     "type": "transcript",
                     "text": transcript.text if transcript.text else "",
@@ -142,46 +143,42 @@ class TranscriptionWebSocket:
                     
                     if payload is not None:
                         try:
-                            # Log incoming payload type and length
-                            logging.info(f"Received payload type: {type(payload)}")
-                            logging.info(f"Payload length: {len(str(payload))}")
-                            
-                            # Handle different payload types
+                            # Log the first audio chunk details
+                            if not self.first_audio_received:
+                                logging.info(f"First audio chunk received.")
+                                logging.info(f"Payload type: {type(payload)}")
+                                if isinstance(payload, str):
+                                    logging.info(f"First few bytes (base64): {payload[:50]}...")
+                                self.first_audio_received = True
+
+                            # For TalkDesk mu-law audio
                             if isinstance(payload, str):
                                 try:
-                                    # Try to decode as base64
                                     audio_data = base64.b64decode(payload)
-                                    logging.info(f"Decoded base64 data, length: {len(audio_data)} bytes")
+                                    # Log audio chunk size
+                                    logging.info(f"Audio chunk size: {len(audio_data)} bytes")
+                                    
+                                    # Stream the audio data
+                                    self.transcriber.stream({"audio_data": audio_data})
                                 except Exception as e:
-                                    logging.error(f"Base64 decode failed: {e}")
-                                    audio_data = payload.encode()
-                            elif isinstance(payload, bytes):
-                                audio_data = payload
+                                    logging.error(f"Error processing audio chunk: {e}")
                             else:
                                 logging.error(f"Unexpected payload type: {type(payload)}")
-                                continue
-
-                            # Log audio data details
-                            logging.info(f"Processing audio data: {len(audio_data)} bytes")
-                            
-                            # Stream to transcriber
-                            self.transcriber.stream({"audio_data": audio_data})
-                            
+                                
                         except Exception as e:
                             logging.error(f"Error processing audio data: {e}")
-                            logging.error(f"Payload that caused error: {payload[:100]}...")  # Log first 100 chars
                             
                 await asyncio.sleep(0.01)
 
         def transcription_thread():
             try:
-                logging.info("Initializing transcriber...")
+                logging.info("Initializing transcriber with mu-law encoding...")
                 
                 self.transcriber = aai.RealtimeTranscriber(
                     on_data=on_transcription_data,
                     on_error=on_transcription_error,
-                    sample_rate=44100,  # Using standard audio sample rate
-                    encoding=aai.AudioEncoding.pcm_mulaw
+                    sample_rate=8000,  # Common for telephony
+                    encoding=aai.AudioEncoding.pcm_mulaw  # Explicitly set mu-law encoding
                 )
 
                 logging.info("Connecting transcriber...")
@@ -192,8 +189,7 @@ class TranscriptionWebSocket:
                     time.sleep(0.01)
                 
             except Exception as e:
-                logging.error(f"Error in transcription thread: {str(e)}")
-                logging.error(f"Error type: {type(e)}")
+                logging.error(f"Error in transcription thread: {e}")
                 import traceback
                 logging.error(f"Traceback: {traceback.format_exc()}")
             finally:
@@ -210,17 +206,13 @@ class TranscriptionWebSocket:
 
             async for message in websocket:
                 try:
-                    # Log raw message length
-                    logging.info(f"Received websocket message length: {len(message)}")
-                    
                     json_parsed_message = json.loads(message)
-                    # Log message structure
-                    logging.info(f"Message keys: {json_parsed_message.keys()}")
-                    
+                    # Log the structure of the first message
+                    if not self.first_audio_received:
+                        logging.info(f"First message structure: {json.dumps(json_parsed_message, indent=2)}")
                     self.audio_queue.put(json_parsed_message)
                 except json.JSONDecodeError as e:
                     logging.error(f"JSON parse error: {e}")
-                    logging.error(f"Failed message: {message[:100]}...")  # Log first 100 chars
                 except Exception as e:
                     logging.error(f"Unexpected error processing message: {e}")
 
@@ -238,6 +230,7 @@ class TranscriptionWebSocket:
                 await self.websocket.send(json.dumps(message))
             except Exception as e:
                 logging.error(f"Error sending message: {e}")
+
 async def start_server(
     host: str = "0.0.0.0",
     port: int = 8765,
