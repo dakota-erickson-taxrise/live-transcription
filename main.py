@@ -90,13 +90,14 @@ class TranscriptionWebSocket:
     def __init__(self, assembly_api_key: str, anthropic_api_key: str):
         self.api_key = assembly_api_key
         aai.settings.api_key = self.api_key
-        self.websocket: Optional[websockets.WebSocketServerProtocol] = None
+        self.websocket = None
         self.transcriber = None
         self.audio_queue = Queue()
         self.is_running = False
         self.loop = None
         self.analyzer = None
         self.first_audio_received = False
+        self.transcriber_ready = asyncio.Event()  # Add this line
 
     async def handle_websocket(self, websocket: websockets.WebSocketServerProtocol):
         self.websocket = websocket
@@ -137,30 +138,32 @@ class TranscriptionWebSocket:
             )
 
         async def process_audio_queue():
+            # Wait for transcriber to be ready
+            await self.transcriber_ready.wait()
+            
             while self.is_running:
                 if not self.audio_queue.empty():
                     message = self.audio_queue.get()
                     
                     try:
-                        # Extract media payload from TalkDesk message structure
                         if message.get("event") == "media" and "media" in message:
                             payload = message["media"].get("payload")
                             
                             if payload:
-                                # Check if payload is not just silence
                                 if not all(c == '/' for c in payload):
                                     try:
                                         audio_data = base64.b64decode(payload)
                                         chunk_size = len(audio_data)
                                         
-                                        # Log non-silent audio chunks
                                         logging.info(f"Processing non-silent audio chunk: {chunk_size} bytes")
                                         
-                                        if chunk_size > 0:
-                                            # Stream the audio data
-                                            self.transcriber.stream({"audio_data": audio_data})
+                                        if chunk_size > 0 and self.transcriber:
+                                            await self.loop.run_in_executor(
+                                                None,
+                                                lambda: self.transcriber.stream(audio_data)
+                                            )
                                         else:
-                                            logging.warning("Received empty audio chunk")
+                                            logging.warning("Received empty audio chunk or transcriber not ready")
                                     except Exception as e:
                                         logging.error(f"Error processing audio chunk: {e}")
                                 else:
@@ -176,26 +179,27 @@ class TranscriptionWebSocket:
                             
                 await asyncio.sleep(0.01)
 
-        def transcription_thread():
+        async def init_transcriber():
             try:
                 logging.info("Initializing transcriber...")
                 
                 self.transcriber = aai.RealtimeTranscriber(
                     on_data=on_transcription_data,
                     on_error=on_transcription_error,
-                    sample_rate=8000,  # Telephony standard
-                    encoding=aai.AudioEncoding.pcm_mulaw  # mu-law encoding
+                    sample_rate=8000,
+                    encoding=aai.AudioEncoding.pcm_mulaw
                 )
 
                 logging.info("Connecting transcriber...")
-                self.transcriber.connect()
+                await self.loop.run_in_executor(None, self.transcriber.connect)
                 logging.info("Transcriber connected successfully")
+                self.transcriber_ready.set()  # Signal that transcriber is ready
                 
                 while self.is_running:
-                    time.sleep(0.01)
-                
+                    await asyncio.sleep(0.1)
+                    
             except Exception as e:
-                logging.error(f"Error in transcription thread: {e}")
+                logging.error(f"Error in transcription initialization: {e}")
                 import traceback
                 logging.error(f"Traceback: {traceback.format_exc()}")
             finally:
@@ -205,15 +209,14 @@ class TranscriptionWebSocket:
 
         try:
             self.is_running = True
-            thread = threading.Thread(target=transcription_thread)
-            thread.start()
-
+            
+            # Start transcriber initialization
+            transcriber_task = asyncio.create_task(init_transcriber())
             audio_process_task = asyncio.create_task(process_audio_queue())
 
             async for message in websocket:
                 try:
                     json_parsed_message = json.loads(message)
-                    # Log first few non-silent messages
                     if not self.first_audio_received and "media" in json_parsed_message:
                         payload = json_parsed_message["media"].get("payload", "")
                         if not all(c == '/' for c in payload):
@@ -234,6 +237,12 @@ class TranscriptionWebSocket:
             if self.transcriber:
                 self.transcriber.close()
             audio_process_task.cancel()
+            transcriber_task.cancel()
+            try:
+                await audio_process_task
+                await transcriber_task
+            except asyncio.CancelledError:
+                pass
 
     async def send_message(self, message):
         if self.websocket and self.websocket.open:
@@ -241,7 +250,6 @@ class TranscriptionWebSocket:
                 await self.websocket.send(json.dumps(message))
             except Exception as e:
                 logging.error(f"Error sending message: {e}")
-
 
 async def start_server(
     host: str = "0.0.0.0",
