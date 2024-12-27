@@ -156,7 +156,7 @@ class TranscriptionWebSocket:
                                         audio_data = base64.b64decode(payload)
                                         chunk_size = len(audio_data)
                                         
-                                        logging.info(f"Processing non-silent audio chunk: {chunk_size} bytes")
+                                        # logging.info(f"Processing non-silent audio chunk: {chunk_size} bytes")
                                         
                                         if chunk_size > 0 and self.transcriber:
                                             await self.loop.run_in_executor(
